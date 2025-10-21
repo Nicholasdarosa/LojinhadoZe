@@ -1,0 +1,18 @@
+{
+  "collectionName": "components_nav_menus",
+  "info": { "displayName": "Menu" },
+  "attributes": {
+    "label": { "type": "string", "required": true },
+    "categorias": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::categoria.categoria"
+    },
+    "marcas": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::marca.marca"
+    },
+    "url": { "type": "string" }
+  }
+}

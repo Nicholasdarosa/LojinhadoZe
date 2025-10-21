@@ -1,0 +1,25 @@
+{
+  "kind": "singleType",
+  "collectionName": "config_do_sites",
+  "info": {
+    "singularName": "config-do-site",
+    "pluralName": "config-do-sites",
+    "displayName": "Config do Site"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "logo": {
+      "type": "media",
+      "multiple": true,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    }
+  }
+}

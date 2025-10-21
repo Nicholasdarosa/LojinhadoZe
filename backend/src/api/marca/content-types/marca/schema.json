@@ -1,0 +1,27 @@
+{
+  "kind": "collectionType",
+  "collectionName": "marcas",
+  "info": {
+    "singularName": "marca",
+    "pluralName": "marcas",
+    "displayName": "Marca"
+  },
+  "options": { "draftAndPublish": true },
+  "attributes": {
+    "nome": { "type": "string", "required": true },
+    "logo": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": ["images"],
+      "required": true
+    },
+    "site": { "type": "string" },
+
+    "home": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::home.home",
+      "inversedBy": "marcas"
+    }
+  }
+}

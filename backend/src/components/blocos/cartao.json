@@ -1,0 +1,19 @@
+{
+  "collectionName": "components_blocos_cartaos",
+  "info": { "displayName": "Cartão" },
+  "attributes": {
+    "titulo": { "type": "string", "required": true },
+    "subtitulo": { "type": "string" },
+    "url": { "type": "string" },
+    "icone": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": ["images", "files", "videos", "audios"]
+    },
+    "imagem": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": ["images"]
+    }
+  }
+}

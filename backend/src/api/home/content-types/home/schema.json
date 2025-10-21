@@ -1,0 +1,53 @@
+{
+  "kind": "singleType",
+  "collectionName": "homes",
+  "info": {
+    "singularName": "home",
+    "pluralName": "homes",
+    "displayName": "Home"
+  },
+  "options": { "draftAndPublish": true },
+  "attributes": {
+    "headerBgColor": { "type": "string", "default": "#ffd101ff" },
+
+    "banners": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::banner.banner"
+    },
+
+    "tituloEscolhidos": { "type": "string", "default": "Escolhidos para você!" },
+    "escolhidos": {
+      "type": "component",
+      "repeatable": true,
+      "component": "blocos.cartao"
+    },
+
+    "tituloMarcas": { "type": "string", "default": "Marcas Parceiras" },
+    "marcas": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::marca.marca"
+    },
+
+    "tituloOfertas": { "type": "string", "default": "Ofertas Imperdíveis" },
+    "limiteOfertas": { "type": "integer", "default": 12 },
+
+    "tituloLancamentos": { "type": "string", "default": "Lançamentos" },
+    "limiteLancamentos": { "type": "integer", "default": 12 },
+
+    "ofertasProdutos": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::produto.produto"
+    },
+    "lancamentosProdutos": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::produto.produto"
+    },
+
+    "whatsappUrl": { "type": "string" },
+    "instagramUrl": { "type": "string" }
+  }
+}
