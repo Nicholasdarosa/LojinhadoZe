@@ -10,14 +10,33 @@
   "attributes": {
     "nome": { "type": "string", "required": true },
     "slug": { "type": "uid", "targetField": "nome" },
-    "imagem": { "type": "media", "multiple": true, "allowedTypes": ["images","files","videos","audios"] },
+    "descricao": { "type": "text" },
+    "imagem": {
+      "type": "media",
+      "multiple": true,
+      "allowedTypes": ["images", "files", "videos", "audios"]
+    },
 
+    "ordem": { "type": "integer", "default": 0 },
+
+    "parent": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::categoria.categoria",
+      "inversedBy": "children"
+    },
+    "children": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::categoria.categoria",
+      "mappedBy": "parent"
+    },
 
     "produtos": {
       "type": "relation",
       "relation": "manyToMany",
       "target": "api::produto.produto",
-      "inversedBy": "categorias"
+      "mappedBy": "categorias"
     }
   }
 }

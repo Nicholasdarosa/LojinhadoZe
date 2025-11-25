@@ -1,20 +1,12 @@
 {
   "kind": "collectionType",
   "collectionName": "marcas",
-  "info": {
-    "singularName": "marca",
-    "pluralName": "marcas",
-    "displayName": "Marca"
-  },
+  "info": { "singularName": "marca", "pluralName": "marcas", "displayName": "Marca" },
   "options": { "draftAndPublish": true },
   "attributes": {
     "nome": { "type": "string", "required": true },
-    "logo": {
-      "type": "media",
-      "multiple": false,
-      "allowedTypes": ["images"],
-      "required": true
-    },
+    "slug": { "type": "uid", "targetField": "nome" },
+    "logo": { "type": "media", "multiple": false, "allowedTypes": ["images"], "required": true },
     "site": { "type": "string" },
 
     "home": {
@@ -22,6 +14,13 @@
       "relation": "manyToOne",
       "target": "api::home.home",
       "inversedBy": "marcas"
+    },
+
+    "produtos": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::produto.produto",
+      "mappedBy": "marca"
     }
   }
 }

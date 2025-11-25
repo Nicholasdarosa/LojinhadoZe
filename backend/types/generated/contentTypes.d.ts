@@ -421,9 +421,14 @@ export interface ApiCategoriaCategoria extends Struct.CollectionTypeSchema {
     draftAndPublish: true;
   };
   attributes: {
+    children: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::categoria.categoria'
+    >;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    descricao: Schema.Attribute.Text;
     imagem: Schema.Attribute.Media<
       'images' | 'files' | 'videos' | 'audios',
       true
@@ -435,6 +440,8 @@ export interface ApiCategoriaCategoria extends Struct.CollectionTypeSchema {
     > &
       Schema.Attribute.Private;
     nome: Schema.Attribute.String & Schema.Attribute.Required;
+    ordem: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    parent: Schema.Attribute.Relation<'manyToOne', 'api::categoria.categoria'>;
     produtos: Schema.Attribute.Relation<'manyToMany', 'api::produto.produto'>;
     publishedAt: Schema.Attribute.DateTime;
     slug: Schema.Attribute.UID<'nome'>;
@@ -545,8 +552,10 @@ export interface ApiMarcaMarca extends Struct.CollectionTypeSchema {
       Schema.Attribute.Private;
     logo: Schema.Attribute.Media<'images'> & Schema.Attribute.Required;
     nome: Schema.Attribute.String & Schema.Attribute.Required;
+    produtos: Schema.Attribute.Relation<'oneToMany', 'api::produto.produto'>;
     publishedAt: Schema.Attribute.DateTime;
     site: Schema.Attribute.String;
+    slug: Schema.Attribute.UID<'nome'>;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -564,6 +573,12 @@ export interface ApiProdutoProduto extends Struct.CollectionTypeSchema {
     draftAndPublish: true;
   };
   attributes: {
+    ativo: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
+    categoriaPrincipal: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::categoria.categoria'
+    > &
+      Schema.Attribute.Required;
     categorias: Schema.Attribute.Relation<
       'manyToMany',
       'api::categoria.categoria'
@@ -572,6 +587,7 @@ export interface ApiProdutoProduto extends Struct.CollectionTypeSchema {
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     descricao: Schema.Attribute.RichText;
+    estoque: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
     galeria: Schema.Attribute.Media<
       'images' | 'files' | 'videos' | 'audios',
       true
@@ -583,6 +599,7 @@ export interface ApiProdutoProduto extends Struct.CollectionTypeSchema {
       'api::produto.produto'
     > &
       Schema.Attribute.Private;
+    marca: Schema.Attribute.Relation<'manyToOne', 'api::marca.marca'>;
     nome: Schema.Attribute.String & Schema.Attribute.Required;
     oferta: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     preco: Schema.Attribute.Decimal &
@@ -594,6 +611,7 @@ export interface ApiProdutoProduto extends Struct.CollectionTypeSchema {
       > &
       Schema.Attribute.DefaultTo<0>;
     publishedAt: Schema.Attribute.DateTime;
+    sku: Schema.Attribute.String;
     slug: Schema.Attribute.UID<'nome'>;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &

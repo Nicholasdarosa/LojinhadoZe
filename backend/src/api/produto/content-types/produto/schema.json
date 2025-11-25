@@ -1,21 +1,55 @@
 {
   "kind": "collectionType",
   "collectionName": "produtos",
-  "info": { "singularName": "produto", "pluralName": "produtos", "displayName": "Produto" },
+  "info": {
+    "singularName": "produto",
+    "pluralName": "produtos",
+    "displayName": "Produto"
+  },
   "options": { "draftAndPublish": true },
   "attributes": {
     "nome": { "type": "string", "required": true },
     "slug": { "type": "uid", "targetField": "nome" },
     "descricao": { "type": "richtext" },
-    "preco": { "type": "decimal", "default": 0, "min": 0 },
-    "galeria": { "type": "media", "multiple": true, "allowedTypes": ["images","files","videos","audios"] },
+
+    "preco": {
+      "type": "decimal",
+      "default": 0,
+      "min": 0,
+      "precision": 10,
+      "scale": 2
+    },
+
+    "galeria": {
+      "type": "media",
+      "multiple": true,
+      "allowedTypes": ["images", "files", "videos", "audios"]
+    },
+
+    "marca": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::marca.marca",
+      "inversedBy": "produtos"
+    },
 
     "categorias": {
       "type": "relation",
       "relation": "manyToMany",
       "target": "api::categoria.categoria",
-      "mappedBy": "produtos"
+      "inversedBy": "produtos"
     },
+
+    "categoriaPrincipal": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::categoria.categoria",
+      "required": true
+    },
+
+    "sku": { "type": "string" },
+    "estoque": { "type": "integer", "default": 0 },
+    "ativo": { "type": "boolean", "default": true },
 
     "oferta": { "type": "boolean", "default": false },
     "lancamento": { "type": "boolean", "default": false }
