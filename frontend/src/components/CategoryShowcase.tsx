@@ -10,8 +10,16 @@ import {
   LucideIcon,
 } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL!;
-const ASSETS = process.env.NEXT_PUBLIC_ASSETS_BASE!;
+/**
+ * Mantemos o padrão do resto do projeto:
+ * NEXT_PUBLIC_STRAPI_URL -> base do Strapi
+ * API = `${STRAPI_BASE}/api`
+ */
+const STRAPI_BASE = (
+  process.env.NEXT_PUBLIC_STRAPI_URL ?? "http://localhost:1337"
+).replace(/\/$/, "");
+const API = `${STRAPI_BASE}/api`;
+const ASSETS = STRAPI_BASE;
 
 // Ordem + rótulos (o que exibimos na UI)
 const TARGET = [
@@ -20,10 +28,13 @@ const TARGET = [
   { slug: "para-enrolar", label: "Para Enrolar" },
   { slug: "narguiles", label: "Narguiles" },
   { slug: "dichavadores", label: "Dichavadores" },
-  { slug: "acendedores-macaricos-isqueiros", label: "Acendedores, Maçaricos e Isqueiros" },
+  {
+    slug: "acendedores-macaricos-isqueiros",
+    label: "Acendedores, Maçaricos e Isqueiros",
+  },
 ];
 
-// Ícones por slug (ajuste se quiser)
+// Ícones por slug
 const iconMap: Record<string, LucideIcon> = {
   acessorios: Scissors,
   pipes: Package2,
@@ -41,10 +52,32 @@ const localImgMap: Record<string, string> = {
   "para-enrolar": "/Para Enrolar.webp",
   narguiles: "/Narguiles.webp",
   dichavadores: "/Dichavadores.webp",
-  "acendedores-macaricos-isqueiros": "/Acendedores,Maçaricos e Isqueiros.webp",
+  "acendedores-macaricos-isqueiros":
+    "/Acendedores,Maçaricos e Isqueiros.webp",
 };
 
 type Cat = { slug: string; nome: string; img?: string };
+
+function extractImageUrl(imagem: any): string | undefined {
+  if (!imagem) return undefined;
+
+  // Pode vir como array direto
+  if (Array.isArray(imagem)) {
+    const first = imagem[0];
+    const a = first?.attributes ?? first;
+    return a?.url;
+  }
+
+  // Ou no formato { data: [...] }
+  if (Array.isArray(imagem?.data)) {
+    const first = imagem.data[0];
+    const a = first?.attributes ?? first;
+    return a?.url;
+  }
+
+  // Ou single media { url } / { attributes: { url } }
+  return imagem?.attributes?.url ?? imagem?.url;
+}
 
 async function fetchSelectedCategories(): Promise<Record<string, Cat>> {
   const params = new URLSearchParams();
@@ -55,23 +88,35 @@ async function fetchSelectedCategories(): Promise<Record<string, Cat>> {
   params.append("pagination[pageSize]", "50");
 
   const url = `${API}/categorias?${params.toString()}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) return {};
 
-  const data = await res.json();
-  const out: Record<string, Cat> = {};
+  try {
+    const res = await fetch(url, { cache: "no-store" });
 
-  for (const item of data?.data ?? []) {
-    const a = item.attributes ?? item;
-    const first = Array.isArray(a.imagem) ? a.imagem[0] : a.imagem?.data?.[0];
-    const rel = first?.url ?? first?.attributes?.url;
-    out[a.slug] = {
-      slug: a.slug,
-      nome: a.nome,
-      img: rel ? `${ASSETS}${rel}` : undefined, // preferimos Strapi se existir
-    };
+    if (!res.ok) {
+      console.error("Erro ao buscar categorias", res.status);
+      return {};
+    }
+
+    const json = await res.json();
+    const out: Record<string, Cat> = {};
+
+    for (const item of json?.data ?? []) {
+      const a = item.attributes ?? item;
+      const rel = extractImageUrl(a.imagem);
+
+      out[a.slug] = {
+        slug: a.slug,
+        nome: a.nome,
+        img: rel ? `${ASSETS}${rel}` : undefined, // se tiver imagem no Strapi, usa ela
+      };
+    }
+
+    return out;
+  } catch (err) {
+    console.error("Falha ao conectar no Strapi (categorias)", err);
+    // Se o Strapi cair, a home não pode quebrar: devolve vazio
+    return {};
   }
-  return out;
 }
 
 export default async function CategoryShowcase() {
@@ -90,6 +135,7 @@ export default async function CategoryShowcase() {
         {TARGET.map(({ slug, label }) => {
           const Icon = pickIcon(slug);
           const c = found[slug];
+
           // 1) se vier do Strapi, usa; 2) senão, usa /public; 3) fallback cinza
           const img =
             c?.img ??
@@ -112,14 +158,13 @@ export default async function CategoryShowcase() {
                 <div className="absolute inset-0 bg-gray-200" />
               )}
 
-             {/* Overlay inicial escuro → clareia no hover */}
-<div className="absolute inset-0 bg-[#fea700]/60 backdrop-blur-[1px] transition-all duration-300 group-hover:bg-black/20 group-hover:backdrop-blur-0" />
-
+              {/* Overlay inicial escuro → clareia no hover */}
+              <div className="absolute inset-0 bg-[#fea700]/60 backdrop-blur-[1px] transition-all duration-300 group-hover:bg-black/20 group-hover:backdrop-blur-0" />
 
               <div className="absolute inset-0 grid place-items-center pointer-events-none">
                 <div className="text-white flex flex-col items-center gap-2 drop-shadow-md">
-                <Icon className="w-12 h-12 md:w-14 md:h-14 lg:w-16 lg:h-16" />
-                <span className="text-xs md:text-sm lg:text-base font-extrabold uppercase tracking-wide text-center">
+                  <Icon className="w-12 h-12 md:w-14 md:h-14 lg:w-16 lg:h-16" />
+                  <span className="text-xs md:text-sm lg:text-base font-extrabold uppercase tracking-wide text-center">
                     {(c?.nome ?? label).toUpperCase()}
                   </span>
                 </div>

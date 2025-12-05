@@ -123,6 +123,7 @@ export default function RegisterForm() {
           value={password}
           onChange={(e) => handlePasswordChange(e.target.value)}
           className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-900/10 focus:border-neutral-800"
+          placeholder="Mínimo 11 caracteres, 1 maiúscula, 1 número e 1 símbolo"
           required
         />
         {passwordError && (

@@ -1,15 +1,23 @@
 // src/components/Header.tsx
 import Link from "next/link";
 import Image from "next/image";
-import { Search, User, Heart, ShoppingCart } from "lucide-react";
+import { Search, Heart, ShoppingCart } from "lucide-react";
 import { strapiGet } from "@/lib/strapi";
 import MenuRow from "./MenuRow";
+import { cookies } from "next/headers";
+import UserMenu from "./UserMenu";
 
 const ASSETS = process.env.NEXT_PUBLIC_ASSETS_BASE!;
 
 type Props = {
   /** cor vinda da Single Type Home (ex.: #ffd101ff) */
   bgColor?: string;
+};
+
+type LojinhaUser = {
+  id: number;
+  email: string;
+  username: string;
 };
 
 /** Single Type: config-do-site (logo = media única ou múltipla) */
@@ -22,8 +30,21 @@ async function getConfig() {
   return data?.data?.attributes ?? data?.data ?? null;
 }
 
+async function getCurrentUserFromCookies(): Promise<LojinhaUser | null> {
+  const store = await cookies();
+  const raw = store.get("lojinha_user")?.value;
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw) as LojinhaUser;
+  } catch {
+    return null;
+  }
+}
+
 export default async function Header({ bgColor = "#ffd101ff" }: Props) {
   const config = await getConfig();
+  const currentUser = await getCurrentUserFromCookies();
 
   // Resolve logo (compatível v4/v5 e absoluta/relativa)
   let logoUrl: string | null = null;
@@ -35,12 +56,15 @@ export default async function Header({ bgColor = "#ffd101ff" }: Props) {
     if (raw) logoUrl = raw.startsWith("http") ? raw : `${ASSETS}${raw}`;
   }
 
+  const firstName =
+    currentUser?.username?.split(" ")[0] ?? currentUser?.username ?? "";
+
   return (
     <header className="sticky top-0 z-50">
       {/* Faixa superior */}
       <div className="w-full text-black" style={{ backgroundColor: bgColor }}>
         <div className="mx-auto max-w-7xl px-4 py-3 grid grid-cols-12 gap-4 items-center">
-          {/* Logo — MAIORZÃO */}
+          {/* Logo */}
           <div className="col-span-12 sm:col-span-3 flex items-center min-h-[72px]">
             <Link href="/" className="inline-flex items-center">
               {logoUrl ? (
@@ -79,16 +103,28 @@ export default async function Header({ bgColor = "#ffd101ff" }: Props) {
 
           {/* Ações */}
           <div className="col-span-12 sm:col-span-3 flex items-center justify-end gap-5">
-            <Link href="/conta" className="group inline-flex items-center gap-2" title="Entrar ou cadastrar">
-              <span className="relative grid h-10 w-10 place-items-center rounded-full border border-black/30 bg-transparent group-hover:bg-black/5 transition">
-                <User className="h-5 w-5" />
-              </span>
-              <span className="hidden sm:block text-sm leading-tight">
-                <span className="block opacity-80">Olá,</span>
-                <span className="block font-semibold">Entre ou Cadastre-se</span>
-              </span>
-            </Link>
+            {/* Bloco de usuário */}
+            {!currentUser ? (
+              // DESLOGADO → link simples para /login
+              <Link
+                href="/login"
+                className="group inline-flex items-center gap-2"
+                title="Entrar ou cadastrar"
+              >
+                <span className="relative grid h-10 w-10 place-items-center rounded-full border border-black/30 bg-transparent group-hover:bg-black/5 transition">
+                  {/* ícone de avatar será renderizado na página de login */}
+                  <span className="h-5 w-5 rounded-full border border-black/60" />
+                </span>
+                <span className="hidden sm:block text-sm leading-tight">
+                  Olá,{" "}
+                  <span className="font-semibold">Entre ou Cadastre-se</span>
+                </span>
+              </Link>
+            ) : (
+              <UserMenu firstName={firstName} />
+            )}
 
+            {/* Favoritos */}
             <Link href="/favoritos" className="relative" title="Favoritos">
               <span className="grid h-10 w-10 place-items-center rounded-full border border-black/30 bg-transparent hover:bg-black/5 transition">
                 <Heart className="h-5 w-5" />
@@ -98,6 +134,7 @@ export default async function Header({ bgColor = "#ffd101ff" }: Props) {
               </span>
             </Link>
 
+            {/* Carrinho */}
             <Link href="/carrinho" className="relative" title="Carrinho">
               <span className="grid h-10 w-10 place-items-center rounded-full border border-black/30 bg-transparent hover:bg-black/5 transition">
                 <ShoppingCart className="h-5 w-5" />
@@ -110,7 +147,7 @@ export default async function Header({ bgColor = "#ffd101ff" }: Props) {
         </div>
       </div>
 
-      {/* Barra de menus — mesma cor do header */}
+      {/* Barra de menus */}
       <MenuRow bgColor={bgColor} />
     </header>
   );

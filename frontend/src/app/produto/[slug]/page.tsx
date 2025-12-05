@@ -5,18 +5,19 @@ export const dynamic = "force-dynamic";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Link from "next/link";
-import FreteCalculator from "@/components/product/FreteCalculator";
+import ProductBuyBox from "@/components/product/ProductBuyBox";
 
-/* ----------------------------- helpers ----------------------------- */
+/* ---------------- helpers / tipos (iguais aos seus) ---------------- */
 
 const STRAPI_BASE =
-  (process.env.NEXT_PUBLIC_STRAPI_URL as string | undefined)?.replace(/\/$/, "") ||
-  "http://localhost:1337";
+  (process.env.NEXT_PUBLIC_STRAPI_URL as string | undefined)?.replace(
+    /\/$/,
+    "",
+  ) || "http://localhost:1337";
 const API = `${STRAPI_BASE}/api`;
 
 function absUrl(u?: string | null): string {
   if (!u) return "";
-  // Strapi geralmente retorna "/uploads/..."
   if (u.startsWith("http://") || u.startsWith("https://")) return u;
   if (u.startsWith("/")) return `${STRAPI_BASE}${u}`;
   return `${STRAPI_BASE}/${u}`;
@@ -26,17 +27,17 @@ function imgFromMedia(media: any): string {
   if (!media) return "";
   if (typeof media === "string") return absUrl(media);
 
-  // single
   if (media?.data && !Array.isArray(media.data)) {
     const a = media.data.attributes ?? media.data;
     return absUrl(a?.url ?? "");
   }
-  // multiple
+
   if (Array.isArray(media?.data)) {
     const first = media.data[0];
     const a = first?.attributes ?? first;
     return absUrl(a?.url ?? "");
   }
+
   return absUrl(media?.attributes?.url ?? media?.url ?? "");
 }
 
@@ -66,10 +67,8 @@ function buildPopulateQS() {
 function mapProduto(item: any): ProdutoView | null {
   if (!item) return null;
 
-  // Suporta tanto { id, attributes: { ... } } quanto { id, nome, preco, galeria, ... }
   const a = item.attributes ?? item;
 
-  // ----- imagens -----
   const imagens: string[] = (() => {
     const raw = a.galeria?.data ?? a.galeria;
 
@@ -90,7 +89,6 @@ function mapProduto(item: any): ProdutoView | null {
     return [];
   })();
 
-  // ----- marca -----
   const marcaRaw = a.marca?.data ?? a.marca ?? null;
   let marca: ProdutoView["marca"] = null;
 
@@ -106,7 +104,6 @@ function mapProduto(item: any): ProdutoView | null {
     };
   }
 
-  // ----- categoria principal -----
   const catRaw = a.categoriaPrincipal?.data ?? a.categoriaPrincipal ?? null;
   const categoriaPrincipal = catRaw
     ? (() => {
@@ -118,7 +115,6 @@ function mapProduto(item: any): ProdutoView | null {
       })()
     : null;
 
-  // ----- categorias -----
   const catsRaw = a.categorias?.data ?? a.categorias ?? [];
   const categorias = Array.isArray(catsRaw)
     ? catsRaw.map((c: any) => {
@@ -130,7 +126,6 @@ function mapProduto(item: any): ProdutoView | null {
       })
     : [];
 
-  // ----- preço -----
   const precoNum = (() => {
     const v = a.preco;
     if (v == null) return 0;
@@ -151,9 +146,8 @@ function mapProduto(item: any): ProdutoView | null {
   };
 }
 
-/* ----------------------------- data fetch ----------------------------- */
+/* ----------------------------- fetch helpers ----------------------------- */
 
-// usa a rota custom do Strapi: GET /api/produtos/slug/:slug
 async function fetchBySlugApi(slug: string): Promise<ProdutoView | null> {
   const cleanSlug = encodeURIComponent(slug);
 
@@ -171,7 +165,6 @@ async function fetchBySlugApi(slug: string): Promise<ProdutoView | null> {
   return mapProduto(json?.data);
 }
 
-// fallback por id, se um dia você quiser acessar /produto/123
 async function fetchById(id: string | number): Promise<ProdutoView | null> {
   const qs = buildPopulateQS();
 
@@ -187,11 +180,9 @@ async function fetchById(id: string | number): Promise<ProdutoView | null> {
 async function getBySlugRobusto(slugOrId: string): Promise<ProdutoView | null> {
   const cleaned = decodeURIComponent(String(slugOrId || "").trim());
 
-  // 1) tenta nossa rota nova /produtos/slug/:slug
   let p = await fetchBySlugApi(cleaned);
   if (p) return p;
 
-  // 2) se for número, tenta buscar por id (opcional)
   const asNumber = Number(cleaned);
   if (Number.isFinite(asNumber)) {
     p = await fetchById(asNumber);
@@ -201,16 +192,14 @@ async function getBySlugRobusto(slugOrId: string): Promise<ProdutoView | null> {
   return null;
 }
 
-/* ----------------------------- page ----------------------------- */
+/* ----------------------------- PAGE ----------------------------- */
 
 export default async function ProdutoPage({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  // Next 15: params é Promise
   const { slug } = await params;
-
   const produto = await getBySlugRobusto(slug);
 
   if (!produto) {
@@ -235,9 +224,6 @@ export default async function ProdutoPage({
       </main>
     );
   }
-
-  const fmt = (v: number) =>
-    v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   return (
     <main>
@@ -266,7 +252,7 @@ export default async function ProdutoPage({
           </span>
         </nav>
 
-        {/* Header produto (nome + marca) */}
+        {/* Header produto */}
         <header className="mb-6 md:mb-8">
           {produto.marca?.nome ? (
             <p className="text-xs md:text-sm uppercase tracking-wide text-neutral-500 mb-1">
@@ -278,7 +264,7 @@ export default async function ProdutoPage({
           </h1>
         </header>
 
-        {/* Bloco principal: galeria + buy box */}
+        {/* Galeria + Buy box */}
         <section className="grid gap-8 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] items-start">
           {/* Galeria */}
           <div>
@@ -311,7 +297,7 @@ export default async function ProdutoPage({
 
               {/* imagem principal */}
               <div className="order-1 md:order-2">
-                <div className="w-full rounded-md border border-neutral-200 bg.white grid place-items-center min-h-[260px] md:min-h-[340px] lg:min-h-[380px] overflow-hidden">
+                <div className="w-full rounded-md border border-neutral-200 bg-white grid place-items-center min-h-[260px] md:min-h-[340px] lg:min-h-[380px] overflow-hidden">
                   {produto.imagens?.length ? (
                     <img
                       src={produto.imagens[0]}
@@ -328,64 +314,19 @@ export default async function ProdutoPage({
             </div>
           </div>
 
-          {/* Buy box */}
-          <aside>
-            <div className="border border-neutral-200 rounded-md p-5 md:p-6 flex flex-col gap-4">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-neutral-500 mb-1">
-                  Preço
-                </p>
-                <div className="text-3xl md:text-4xl font-extrabold text-neutral-900">
-                  {fmt(produto.preco)}
-                </div>
-              </div>
-
-              {/* Quantidade */}
-              <div className="flex items-center gap-4">
-                <span className="text-sm text-neutral-600">Quantidade</span>
-                <div className="inline-flex items-center rounded-full border border-neutral-300 bg-white overflow-hidden text-sm">
-                  <button className="px-4 py-2 border-r border-neutral-300 hover:bg-neutral-50">
-                    −
-                  </button>
-                  <span className="px-4 py-2 min-w-[2.5rem] text-center">
-                    1
-                  </span>
-                  <button className="px-4 py-2 border-l border-neutral-300 hover:bg-neutral-50">
-                    +
-                  </button>
-                </div>
-              </div>
-
-              {/* CTA Comprar */}
-              <div className="flex flex-col gap-2">
-                <Link
-                  href={`/login?redirect=/produto/${produto.slug}`}
-                  className="w-full inline-flex items-center justify-center rounded-md bg-[#ff6a00] py-3 text-sm font-semibold text.white hover:brightness-95 active:scale-[0.99] transition"
-                >
-                  Comprar
-                </Link>
-                <p className="text-xs text-neutral-500">
-                  Disponível:{" "}
-                  <span className="font-semibold text-neutral-700">
-                    Em estoque
-                  </span>
-                </p>
-              </div>
-
-              {/* Frete */}
-              <div className="pt-3 border-t border-neutral-200 mt-2">
-                <p className="font-semibold text-sm mb-2 text-neutral-800">
-                  Calcule o frete
-                </p>
-                <FreteCalculator produtoId={produto.id} />
-              </div>
-            </div>
-          </aside>
+          {/* Buy box client-side */}
+          <ProductBuyBox
+            product={{
+              id: produto.id,
+              slug: produto.slug,
+              nome: produto.nome,
+              preco: produto.preco,
+            }}
+          />
         </section>
 
-        {/* Descrição / abas */}
+        {/* Descrição */}
         <section className="mt-10 md:mt-12">
-          {/* Tabs fake (só visual por enquanto) */}
           <div className="flex items-center gap-8 border-b border-neutral-200">
             <button className="relative pb-3 text-sm font-semibold text-neutral-900">
               DESCRIÇÃO GERAL
