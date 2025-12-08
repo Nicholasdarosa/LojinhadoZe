@@ -7,13 +7,14 @@ import Footer from "@/components/Footer";
 import Link from "next/link";
 import ProductBuyBox from "@/components/product/ProductBuyBox";
 
-/* ---------------- helpers / tipos (iguais aos seus) ---------------- */
+/* ---------------- helpers / tipos ---------------- */
 
 const STRAPI_BASE =
   (process.env.NEXT_PUBLIC_STRAPI_URL as string | undefined)?.replace(
     /\/$/,
     "",
   ) || "http://localhost:1337";
+
 const API = `${STRAPI_BASE}/api`;
 
 function absUrl(u?: string | null): string {
@@ -199,6 +200,7 @@ export default async function ProdutoPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
+  // Next 15 reclama se não der await em params
   const { slug } = await params;
   const produto = await getBySlugRobusto(slug);
 
@@ -208,13 +210,13 @@ export default async function ProdutoPage({
         <Header />
         <div className="mx-auto max-w-6xl px-4 py-16">
           <div className="text-center">
-            <h1 className="text-2xl font-bold mb-2">Produto não encontrado</h1>
-            <p className="text-neutral-500 mb-4">
+            <h1 className="mb-2 text-2xl font-bold">Produto não encontrado</h1>
+            <p className="mb-4 text-neutral-500">
               O item que você tentou acessar não está disponível no momento.
             </p>
             <Link
               href="/"
-              className="inline-flex items-center justify-center rounded-full bg-black px-5 py-2 text-sm font-medium text-white hover:opacity-90 transition"
+              className="inline-flex items-center justify-center rounded-full bg-black px-5 py-2 text-sm font-medium text-white transition hover:opacity-90"
             >
               Voltar para a página inicial
             </Link>
@@ -225,13 +227,16 @@ export default async function ProdutoPage({
     );
   }
 
+  const imagemPrincipal = produto.imagens[0] ?? "";
+  const precoEmCentavos = Math.round(produto.preco * 100);
+
   return (
     <main>
       <Header />
 
-      <div className="mx-auto max-w-6xl lg:max-w-7xl px-4 md:px-6 lg:px-8 py-8 md:py-10">
+      <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10 lg:max-w-7xl lg:px-8">
         {/* Breadcrumb */}
-        <nav className="text-xs md:text-sm text-neutral-500 mb-4 md:mb-6 flex flex-wrap items-center gap-1">
+        <nav className="mb-4 flex flex-wrap items-center gap-1 text-xs text-neutral-500 md:mb-6 md:text-sm">
           <Link href="/" className="hover:text-black hover:underline">
             Home
           </Link>
@@ -247,7 +252,7 @@ export default async function ProdutoPage({
             </>
           ) : null}
           <span className="mx-1 text-neutral-400">/</span>
-          <span className="text-black font-medium truncate">
+          <span className="truncate font-medium text-black">
             {produto.nome}
           </span>
         </nav>
@@ -255,30 +260,31 @@ export default async function ProdutoPage({
         {/* Header produto */}
         <header className="mb-6 md:mb-8">
           {produto.marca?.nome ? (
-            <p className="text-xs md:text-sm uppercase tracking-wide text-neutral-500 mb-1">
+            <p className="mb-1 text-xs uppercase tracking-wide text-neutral-500 md:text-sm">
               {produto.marca.nome}
             </p>
           ) : null}
-          <h1 className="text-2xl md:text-3xl lg:text-4xl font-extrabold tracking-tight text-neutral-900">
+          <h1 className="text-2xl font-extrabold tracking-tight text-neutral-900 md:text-3xl lg:text-4xl">
             {produto.nome}
           </h1>
         </header>
 
         {/* Galeria + Buy box */}
-        <section className="grid gap-8 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] items-start">
+        <section className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
           {/* Galeria */}
           <div>
-            <div className="grid gap-4 md:grid-cols-[80px_minmax(0,1fr)] items-start">
+            <div className="grid items-start gap-4 md:grid-cols-[80px_minmax(0,1fr)]">
               {/* thumbs */}
               <aside className="order-2 md:order-1">
-                <div className="flex md:flex-col gap-3 max-md:overflow-x-auto max-md:-mx-2 max-md:px-2">
+                <div className="max-md:-mx-2 max-md:flex max-md:gap-3 max-md:overflow-x-auto max-md:px-2 md:flex md:flex-col md:gap-3">
                   {(produto.imagens.length ? produto.imagens : [""]).map(
                     (src, i) => (
                       <div
                         key={i}
-                        className="h-16 w-16 md:h-18 md:w-18 rounded-md border border-neutral-200 bg-white grid place-items-center overflow-hidden cursor-pointer hover:border-neutral-400 transition"
+                        className="grid h-16 w-16 cursor-pointer place-items-center overflow-hidden rounded-md border border-neutral-200 bg-white transition hover:border-neutral-400 md:h-18 md:w-18"
                       >
                         {src ? (
+                          // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={src}
                             alt={`Thumbnail ${i + 1}`}
@@ -297,15 +303,16 @@ export default async function ProdutoPage({
 
               {/* imagem principal */}
               <div className="order-1 md:order-2">
-                <div className="w-full rounded-md border border-neutral-200 bg-white grid place-items-center min-h-[260px] md:min-h-[340px] lg:min-h-[380px] overflow-hidden">
+                <div className="grid min-h-[260px] w-full place-items-center overflow-hidden rounded-md border border-neutral-200 bg-white md:min-h-[340px] lg:min-h-[380px]">
                   {produto.imagens?.length ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={produto.imagens[0]}
+                      src={imagemPrincipal}
                       alt={produto.nome}
                       className="max-h-[420px] w-auto object-contain"
                     />
                   ) : (
-                    <div className="text-neutral-400 text-sm">
+                    <div className="text-sm text-neutral-400">
                       Sem imagem disponível
                     </div>
                   )}
@@ -317,10 +324,12 @@ export default async function ProdutoPage({
           {/* Buy box client-side */}
           <ProductBuyBox
             product={{
-              id: produto.id,
+              id: Number(produto.id),
               slug: produto.slug,
               nome: produto.nome,
               preco: produto.preco,
+              precoEmCentavos,
+              imagemPrincipal,
             }}
           />
         </section>
@@ -338,7 +347,7 @@ export default async function ProdutoPage({
           </div>
 
           <div className="pt-6 md:pt-7">
-            <div className="prose max-w-none prose-p:mb-3 prose-p:text-[15px] prose-p:leading-relaxed text-neutral-700">
+            <div className="prose max-w-none text-neutral-700 prose-p:mb-3 prose-p:text-[15px] prose-p:leading-relaxed">
               {produto.descricao ? (
                 <div
                   className="prose max-w-none"

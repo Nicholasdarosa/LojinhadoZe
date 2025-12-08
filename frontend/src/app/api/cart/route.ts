@@ -1,219 +1,390 @@
-import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "crypto";
+
+const CART_COOKIE_KEY = "lojinha_cart";
 
 const STRAPI_BASE =
-  process.env.NEXT_PUBLIC_STRAPI_URL?.replace(/\/$/, "") ||
-  "http://localhost:1337";
+  (process.env.NEXT_PUBLIC_STRAPI_URL as string | undefined)?.replace(
+    /\/$/,
+    "",
+  ) || "http://localhost:1337";
 
-type CartItem = {
-  productId: number;
-  slug: string;
-  name: string;
-  price: number;
-  image?: string;
+const STRAPI_API = `${STRAPI_BASE}/api`;
+
+/**
+ * O que fica salvo no cookie: mínimo necessário.
+ */
+type RawCartItem = {
+  lineId: string;
+  productId: number | string;
+  slug?: string;
+  variantId?: number | string;
   quantity: number;
 };
 
-type Cart = {
-  items: CartItem[];
+type RawCart = {
+  id: string;
+  items: RawCartItem[];
 };
 
-function parseCart(raw: string | undefined | null): Cart {
-  if (!raw) return { items: [] };
+/**
+ * O que o frontend enxerga.
+ */
+export type CartItem = {
+  id: string;
+  productId: number | string;
+  variantId?: number | string;
+  name: string;
+  slug: string;
+  imageUrl: string;
+  unitPrice: number; // em centavos
+  quantity: number;
+};
 
+export type Cart = {
+  id: string;
+  items: CartItem[];
+  subtotal: number;
+  total: number;
+};
+
+/* ---------------- helpers gerais ---------------- */
+
+function parseRawCart(raw: string | undefined): RawCart | null {
+  if (!raw) return null;
   try {
-    const obj = JSON.parse(raw);
-    if (!Array.isArray(obj.items)) return { items: [] };
-
-    return {
-      items: obj.items.map((it: any) => ({
-        productId: Number(it.productId),
-        slug: String(it.slug ?? ""),
-        name: String(it.name ?? ""),
-        price: Number(it.price ?? 0),
-        image: it.image ? String(it.image) : undefined,
-        quantity: Number(it.quantity ?? 1) || 1,
-      })),
-    };
+    const cart = JSON.parse(raw) as RawCart;
+    if (!cart.id || !Array.isArray(cart.items)) return null;
+    return cart;
   } catch {
-    return { items: [] };
+    return null;
   }
 }
 
-function computeSubtotal(cart: Cart): number {
-  return cart.items.reduce((acc, it) => acc + it.price * it.quantity, 0);
-}
+async function getOrCreateRawCart(): Promise<RawCart> {
+  const cookieStore = await cookies();
+  const raw = cookieStore.get(CART_COOKIE_KEY)?.value;
+  const existing = parseRawCart(raw);
+  if (existing) return existing;
 
-function createCartResponse(cart: Cart) {
-  const payload = {
-    items: cart.items,
-    subtotal: computeSubtotal(cart),
+  const cart: RawCart = {
+    id: randomUUID(),
+    items: [],
   };
 
-  const res = NextResponse.json(payload);
-
-  // persiste o cookie do carrinho (7 dias)
-  res.cookies.set("lojinha_cart", JSON.stringify(cart), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+  cookieStore.set(CART_COOKIE_KEY, JSON.stringify(cart), {
+    httpOnly: false,
     path: "/",
-    maxAge: 60 * 60 * 24 * 7,
+    maxAge: 60 * 60 * 24 * 30,
   });
 
-  return res;
+  return cart;
 }
 
-// GET → retorna carrinho atual
-export async function GET(_request: Request) {
-  const store = await cookies();
-  const raw = store.get("lojinha_cart")?.value;
-  const cart = parseCart(raw);
-
-  return NextResponse.json({
-    items: cart.items,
-    subtotal: computeSubtotal(cart),
+async function saveRawCart(cart: RawCart): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.set(CART_COOKIE_KEY, JSON.stringify(cart), {
+    httpOnly: false,
+    path: "/",
+    maxAge: 60 * 60 * 24 * 30,
   });
 }
 
-// POST → adiciona item ao carrinho
-// body: { productId, slug, quantity? }
-export async function POST(request: Request) {
-  const store = await cookies();
-  const jwt = store.get("lojinha_token")?.value;
+/* ---------------- helpers Strapi ---------------- */
 
-  // força login pra ter carrinho vinculado ao usuário
-  if (!jwt) {
-    return NextResponse.json(
-      { error: "Não autenticado." },
-      { status: 401 },
-    );
+function absUrl(u?: string | null): string {
+  if (!u) return "";
+  if (u.startsWith("http://") || u.startsWith("https://")) return u;
+  if (u.startsWith("/")) return `${STRAPI_BASE}${u}`;
+  return `${STRAPI_BASE}/${u}`;
+}
+
+async function fetchProductFromStrapiBySlugOrId(
+  productId: number | string,
+  slug?: string,
+): Promise<{
+  name: string;
+  slug: string;
+  unitPrice: number;
+  imageUrl: string;
+} | null> {
+  const qs = "populate[galeria][fields]=url";
+
+  // 1º tenta pelo slug (se existir)
+  if (slug) {
+    const encodedSlug = encodeURIComponent(slug);
+    const urlSlug = `${STRAPI_API}/produtos/slug/${encodedSlug}?${qs}`;
+
+    try {
+      const resSlug = await fetch(urlSlug, { cache: "no-store" });
+      if (resSlug.ok) {
+        const json = await resSlug.json();
+        const data = json?.data;
+        if (data) {
+          const a = data.attributes ?? data;
+          const nome = a.nome as string | undefined;
+          const slugAttr = a.slug as string | undefined;
+          const precoRaw = a.preco;
+
+          let precoNumber = 0;
+          if (precoRaw != null) {
+            const n =
+              typeof precoRaw === "string"
+                ? Number(precoRaw.replace(",", "."))
+                : Number(precoRaw);
+            precoNumber = Number.isFinite(n) ? n : 0;
+          }
+
+          const galeria = a.galeria?.data ?? a.galeria;
+          let imageUrl = "";
+          if (Array.isArray(galeria) && galeria.length > 0) {
+            const first = galeria[0];
+            const attr = first.attributes ?? first;
+            imageUrl = absUrl(attr?.url ?? "");
+          }
+
+          return {
+            name: nome ?? `Produto #${productId}`,
+            slug: slugAttr ?? slug,
+            unitPrice: precoNumber > 0 ? Math.round(precoNumber * 100) : 0,
+            imageUrl,
+          };
+        }
+      } else if (resSlug.status !== 404) {
+        console.error(
+          "Erro ao buscar produto no Strapi por slug:",
+          resSlug.status,
+          urlSlug,
+        );
+      }
+    } catch (err) {
+      console.error("Erro fetchProductFromStrapi por slug:", err);
+    }
   }
 
-  const rawCart = store.get("lojinha_cart")?.value;
-  const cart = parseCart(rawCart);
+  // 2º fallback: tenta por ID numérico
+  const idNumber = Number(productId);
+  if (!Number.isFinite(idNumber)) {
+    return null;
+  }
 
-  const body = await request.json().catch(() => ({}));
-  const slug = typeof body.slug === "string" ? body.slug : "";
-  const qty = Number(body.quantity ?? 1) || 1;
+  const urlId = `${STRAPI_API}/produtos/${idNumber}?${qs}`;
 
-  if (!slug) {
+  try {
+    const resId = await fetch(urlId, { cache: "no-store" });
+    if (!resId.ok) {
+      if (resId.status !== 404) {
+        console.error(
+          "Erro ao buscar produto no Strapi por ID:",
+          resId.status,
+          urlId,
+        );
+      }
+      return null;
+    }
+
+    const json = await resId.json();
+    const data = json?.data;
+    if (!data) return null;
+
+    const a = data.attributes ?? data;
+    const nome = a.nome as string | undefined;
+    const slugAttr = a.slug as string | undefined;
+    const precoRaw = a.preco;
+
+    let precoNumber = 0;
+    if (precoRaw != null) {
+      const n =
+        typeof precoRaw === "string"
+          ? Number(precoRaw.replace(",", "."))
+          : Number(precoRaw);
+      precoNumber = Number.isFinite(n) ? n : 0;
+    }
+
+    const galeria = a.galeria?.data ?? a.galeria;
+    let imageUrl = "";
+    if (Array.isArray(galeria) && galeria.length > 0) {
+      const first = galeria[0];
+      const attr = first.attributes ?? first;
+      imageUrl = absUrl(attr?.url ?? "");
+    }
+
+    return {
+      name: nome ?? `Produto #${productId}`,
+      slug: slugAttr ?? String(productId),
+      unitPrice: precoNumber > 0 ? Math.round(precoNumber * 100) : 0,
+      imageUrl,
+    };
+  } catch (err) {
+    console.error("Erro fetchProductFromStrapi por ID:", err);
+    return null;
+  }
+}
+
+/**
+ * Monta o carrinho completo (nome, preço, imagem) a partir do raw do cookie.
+ */
+async function buildCartFromRaw(raw: RawCart): Promise<Cart> {
+  const items: CartItem[] = [];
+
+  for (const rawItem of raw.items) {
+    const productData = await fetchProductFromStrapiBySlugOrId(
+      rawItem.productId,
+      rawItem.slug,
+    );
+
+    if (productData) {
+      items.push({
+        id: rawItem.lineId,
+        productId: rawItem.productId,
+        variantId: rawItem.variantId,
+        name: productData.name,
+        slug: productData.slug,
+        imageUrl: productData.imageUrl,
+        unitPrice: productData.unitPrice,
+        quantity: rawItem.quantity,
+      });
+    } else {
+      // fallback se der 404/erro: não some com item do carrinho
+      items.push({
+        id: rawItem.lineId,
+        productId: rawItem.productId,
+        variantId: rawItem.variantId,
+        name: `Produto #${rawItem.productId}`,
+        slug: String(rawItem.slug || rawItem.productId),
+        imageUrl: "",
+        unitPrice: 0,
+        quantity: rawItem.quantity,
+      });
+    }
+  }
+
+  const subtotal = items.reduce(
+    (acc, item) => acc + item.unitPrice * item.quantity,
+    0,
+  );
+
+  const cart: Cart = {
+    id: raw.id,
+    items,
+    subtotal,
+    total: subtotal,
+  };
+
+  return cart;
+}
+
+/* ------------------------ HANDLERS HTTP ------------------------ */
+
+// GET /api/cart
+export async function GET() {
+  const raw = await getOrCreateRawCart();
+  const cart = await buildCartFromRaw(raw);
+  return NextResponse.json(cart);
+}
+
+// POST /api/cart → adicionar/atualizar item
+export async function POST(req: NextRequest) {
+  const body = (await req.json().catch(() => null)) as
+    | {
+        productId?: number | string;
+        quantity?: number;
+        variantId?: number | string;
+        slug?: string;
+      }
+    | null;
+
+  if (!body?.productId) {
     return NextResponse.json(
-      { error: "slug obrigatório." },
+      { message: "productId obrigatório" },
       { status: 400 },
     );
   }
 
-  // usa a rota POR SLUG, que a gente já sabe que funciona
-  const encodedSlug = encodeURIComponent(slug);
-  const qs = new URLSearchParams({
-    "populate[galeria][fields]": "url",
-  });
+  const quantity = body.quantity && body.quantity > 0 ? body.quantity : 1;
 
-  const strapiRes = await fetch(
-    `${STRAPI_BASE}/api/produtos/slug/${encodedSlug}?${qs.toString()}`,
-    { cache: "no-store" },
-  );
+  const raw = await getOrCreateRawCart();
 
-  if (!strapiRes.ok) {
-    return NextResponse.json(
-      { error: "Produto não encontrado." },
-      { status: 404 },
-    );
-  }
-
-  const json = await strapiRes.json();
-  const d = json?.data;
-  const a = d?.attributes ?? d ?? {};
-
-  const productIdNum = Number(d?.id ?? 0);
-
-  const preco = (() => {
-    const v = a.preco;
-    if (v == null) return 0;
-    const n = typeof v === "string" ? Number(v.replace(",", ".")) : Number(v);
-    return Number.isFinite(n) ? n : 0;
-  })();
-
-  // imagem principal
-  const galeria = a.galeria?.data ?? a.galeria ?? [];
-  let imageUrl: string | undefined;
-  if (Array.isArray(galeria) && galeria[0]) {
-    const attr = galeria[0].attributes ?? galeria[0];
-    imageUrl = attr?.url;
-  }
-
-  const existingIndex = cart.items.findIndex(
-    (it) => it.productId === productIdNum,
+  const existingIndex = raw.items.findIndex(
+    (item) =>
+      String(item.productId) === String(body.productId) &&
+      String(item.variantId ?? "") === String(body.variantId ?? ""),
   );
 
   if (existingIndex >= 0) {
-    cart.items[existingIndex].quantity += qty;
+    raw.items[existingIndex].quantity += quantity;
+    // se slug veio e antes não tinha, salva
+    if (body.slug && !raw.items[existingIndex].slug) {
+      raw.items[existingIndex].slug = body.slug;
+    }
   } else {
-    cart.items.push({
-      productId: productIdNum,
-      slug: a.slug ?? slug,
-      name: a.nome ?? "Produto",
-      price: preco,
-      image: imageUrl,
-      quantity: qty,
+    raw.items.push({
+      lineId: randomUUID(),
+      productId: body.productId,
+      variantId: body.variantId,
+      quantity,
+      slug: body.slug,
     });
   }
 
-  return createCartResponse(cart);
+  await saveRawCart(raw);
+
+  const cart = await buildCartFromRaw(raw);
+  return NextResponse.json(cart, { status: 201 });
 }
 
-// PATCH → atualiza quantidade de um item
-// body: { productId, quantity }
-export async function PATCH(request: Request) {
-  const store = await cookies();
-  const rawCart = store.get("lojinha_cart")?.value;
-  const cart = parseCart(rawCart);
+// PATCH /api/cart → atualizar quantidade
+export async function PATCH(req: NextRequest) {
+  const body = (await req.json().catch(() => null)) as
+    | { itemId?: string; quantity?: number }
+    | null;
 
-  const body = await request.json().catch(() => ({}));
-  const productIdNum = Number(body.productId);
-  const newQty = Number(body.quantity);
-
-  if (!Number.isFinite(productIdNum)) {
+  if (!body?.itemId || typeof body.quantity !== "number") {
     return NextResponse.json(
-      { error: "productId inválido." },
+      { message: "Parâmetros inválidos" },
       { status: 400 },
     );
   }
 
-  const idx = cart.items.findIndex((it) => it.productId === productIdNum);
-  if (idx < 0) {
+  const raw = await getOrCreateRawCart();
+  const idx = raw.items.findIndex((item) => item.lineId === body.itemId);
+  if (idx === -1) {
+    return NextResponse.json({ message: "Item não encontrado" }, { status: 404 });
+  }
+
+  if (body.quantity <= 0) {
+    raw.items.splice(idx, 1);
+  } else {
+    raw.items[idx].quantity = body.quantity;
+  }
+
+  await saveRawCart(raw);
+  const cart = await buildCartFromRaw(raw);
+  return NextResponse.json(cart);
+}
+
+// DELETE /api/cart?itemId=xxx
+export async function DELETE(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const itemId = searchParams.get("itemId");
+
+  if (!itemId) {
     return NextResponse.json(
-      { error: "Item não encontrado no carrinho." },
-      { status: 404 },
+      { message: "itemId obrigatório" },
+      { status: 400 },
     );
   }
 
-  if (!Number.isFinite(newQty) || newQty <= 0) {
-    // remove o item se quantidade <= 0
-    cart.items.splice(idx, 1);
-  } else {
-    cart.items[idx].quantity = newQty;
+  const raw = await getOrCreateRawCart();
+  const idx = raw.items.findIndex((item) => item.lineId === itemId);
+  if (idx === -1) {
+    return NextResponse.json({ message: "Item não encontrado" }, { status: 404 });
   }
 
-  return createCartResponse(cart);
-}
+  raw.items.splice(idx, 1);
+  await saveRawCart(raw);
 
-// DELETE → limpa carrinho ou remove item
-// body opcional: { productId }
-export async function DELETE(request: Request) {
-  const store = await cookies();
-  const rawCart = store.get("lojinha_cart")?.value;
-  const cart = parseCart(rawCart);
-
-  const body = await request.json().catch(() => ({}));
-  const productIdNum = body.productId ? Number(body.productId) : null;
-
-  if (productIdNum && Number.isFinite(productIdNum)) {
-    cart.items = cart.items.filter((it) => it.productId !== productIdNum);
-  } else {
-    cart.items = [];
-  }
-
-  return createCartResponse(cart);
+  const cart = await buildCartFromRaw(raw);
+  return NextResponse.json(cart);
 }
