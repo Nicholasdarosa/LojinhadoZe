@@ -5,18 +5,39 @@ const STRAPI_BASE =
   process.env.NEXT_PUBLIC_STRAPI_URL?.replace(/\/$/, "") ||
   "http://localhost:1337";
 
+function calcularIdade(dataIso: string): number {
+  const birth = new Date(dataIso);
+  if (Number.isNaN(birth.getTime())) return -1;
+
+  const hoje = new Date();
+  let idade = hoje.getFullYear() - birth.getFullYear();
+  const m = hoje.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && hoje.getDate() < birth.getDate())) {
+    idade--;
+  }
+  return idade;
+}
+
 export async function POST(req: Request) {
   try {
-    const { username, email, password } = await req.json();
+    const { username, email, password, dataNascimento } = await req.json();
 
-    if (!username || !email || !password) {
+    if (!username || !email || !password || !dataNascimento) {
       return NextResponse.json(
-        { error: "Preencha nome, e-mail e senha." },
+        { error: "Preencha nome, e-mail, senha e data de nascimento." },
         { status: 400 },
       );
     }
 
-    // Chama o Strapi
+    const idade = calcularIdade(dataNascimento);
+    if (idade < 18) {
+      return NextResponse.json(
+        { error: "Você precisa ter pelo menos 18 anos para se cadastrar." },
+        { status: 400 },
+      );
+    }
+
+    // registra no Strapi
     const strapiRes = await fetch(`${STRAPI_BASE}/api/auth/local/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -52,7 +73,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Sucesso: pega jwt + user
     const jwt = data?.jwt as string | undefined;
     const user = data?.user;
 
@@ -64,6 +84,28 @@ export async function POST(req: Request) {
       );
     }
 
+    // cria cliente inicial com data de nascimento
+    try {
+      await fetch(`${STRAPI_BASE}/api/clientes`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${jwt}`,
+        },
+        body: JSON.stringify({
+          data: {
+            user: user.id,
+            nomeCompleto: user.username,
+            cpf: "",
+            telefone: "",
+            dataNascimento,
+          },
+        }),
+      });
+    } catch (e) {
+      console.error("Falha ao criar cliente no registro:", e);
+    }
+
     const res = NextResponse.json({
       user: {
         id: user.id,
@@ -72,16 +114,14 @@ export async function POST(req: Request) {
       },
     });
 
-    // Cookie com token
     res.cookies.set("lojinha_token", jwt, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 60 * 60 * 24 * 7, // 7 dias
+      maxAge: 60 * 60 * 24 * 7,
     });
 
-    // Cookie "leve" com dados básicos do user
     res.cookies.set(
       "lojinha_user",
       JSON.stringify({

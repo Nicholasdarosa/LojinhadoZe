@@ -20,6 +20,14 @@ type LojinhaUser = {
   username: string;
 };
 
+type RawCartItem = {
+  quantity?: number;
+};
+
+type RawCart = {
+  items?: RawCartItem[];
+};
+
 /** Single Type: config-do-site (logo = media única ou múltipla) */
 async function getConfig() {
   const data = await strapiGet<any>("/config-do-site", {
@@ -45,6 +53,40 @@ async function getCurrentUserFromCookies(): Promise<LojinhaUser | null> {
 export default async function Header({ bgColor = "#ffd101ff" }: Props) {
   const config = await getConfig();
   const currentUser = await getCurrentUserFromCookies();
+
+  // ---- Contadores de carrinho e favoritos (via cookies) ----
+  const cookieStore = await cookies();
+
+  let cartCount = 0;
+  let wishlistCount = 0;
+
+  // Carrinho: cookie "lojinha_cart"
+  try {
+    const rawCart = cookieStore.get("lojinha_cart")?.value;
+    if (rawCart) {
+      const parsed = JSON.parse(rawCart) as RawCart;
+      const items = Array.isArray(parsed.items) ? parsed.items : [];
+      // aqui contamos APENAS quantos itens diferentes existem
+      cartCount = items.length;
+    }
+  } catch (err) {
+    console.error("Erro ao parsear cookie de carrinho:", err);
+  }
+
+  // Favoritos: cookie "lojinha_favoritos" (preparado para quando existir)
+  try {
+    const rawFav = cookieStore.get("lojinha_favoritos")?.value;
+    if (rawFav) {
+      const parsed = JSON.parse(rawFav);
+      if (Array.isArray(parsed)) {
+        wishlistCount = parsed.length;
+      } else if (Array.isArray(parsed.items)) {
+        wishlistCount = parsed.items.length;
+      }
+    }
+  } catch (err) {
+    console.error("Erro ao parsear cookie de favoritos:", err);
+  }
 
   // Resolve logo (compatível v4/v5 e absoluta/relativa)
   let logoUrl: string | null = null;
@@ -130,7 +172,7 @@ export default async function Header({ bgColor = "#ffd101ff" }: Props) {
                 <Heart className="h-5 w-5" />
               </span>
               <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-orange-500 text-[10px] font-bold text-white">
-                0
+                {wishlistCount}
               </span>
             </Link>
 
@@ -140,7 +182,7 @@ export default async function Header({ bgColor = "#ffd101ff" }: Props) {
                 <ShoppingCart className="h-5 w-5" />
               </span>
               <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-orange-500 text-[10px] font-bold text-white">
-                0
+                {cartCount}
               </span>
             </Link>
           </div>

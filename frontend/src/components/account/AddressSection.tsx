@@ -1,9 +1,11 @@
+// src/components/account/AddressSection.tsx
 "use client";
 
-import { useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 export type Address = {
   id?: number | string;
+  documentId?: string | null;
   apelido?: string;
   cep?: string;
   logradouro?: string;
@@ -20,23 +22,78 @@ type Props = {
 };
 
 export default function AddressSection({ initialAddresses }: Props) {
-  const [addresses, setAddresses] = useState<Address[]>(initialAddresses ?? []);
+  const [addresses, setAddresses] = useState<Address[]>(
+    initialAddresses ?? [],
+  );
   const [editing, setEditing] = useState<Address | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
+  // Sempre carrega o endereço salvo na API ao montar
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAddresses() {
+      try {
+        const res = await fetch("/api/account/address", { method: "GET" });
+
+        if (!res.ok) return;
+
+        const json = await res.json().catch(() => null);
+        if (!json?.data || cancelled) return;
+
+        const list: Address[] = (json.data as any[]).map((item) => ({
+          id: item.id,
+          documentId: item.documentId ?? null,
+          apelido: item.apelido ?? "",
+          cep: item.cep ?? "",
+          logradouro: item.logradouro ?? "",
+          numero: item.numero ?? "",
+          complemento: item.complemento ?? "",
+          bairro: item.bairro ?? "",
+          cidade: item.cidade ?? "",
+          estado: item.estado ?? "",
+          principal: !!item.principal,
+        }));
+
+        // mantém só UM endereço no estado (principal ou o último)
+        const main =
+          list.find((a) => a.principal) ||
+          (list.length > 0 ? list[list.length - 1] : undefined);
+
+        setAddresses(main ? [main] : []);
+      } catch (err) {
+        console.error("Erro carregando endereços:", err);
+      }
+    }
+
+    loadAddresses();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function startNew() {
-    setEditing({
-      apelido: "",
-      cep: "",
-      logradouro: "",
-      numero: "",
-      complemento: "",
-      bairro: "",
-      cidade: "",
-      estado: "",
-      principal: addresses.length === 0,
-    });
+    const current = addresses[0];
+
+    if (current) {
+      // editar o endereço existente
+      setEditing({ ...current });
+    } else {
+      // primeiro endereço
+      setEditing({
+        apelido: "",
+        cep: "",
+        logradouro: "",
+        numero: "",
+        complemento: "",
+        bairro: "",
+        cidade: "",
+        estado: "",
+        principal: true,
+      });
+    }
   }
 
   function editAddress(a: Address) {
@@ -47,7 +104,7 @@ export default function AddressSection({ initialAddresses }: Props) {
     setEditing((prev) => (prev ? { ...prev, [key]: value } : prev));
   }
 
-  async function handleSave(e: React.FormEvent) {
+  async function handleSave(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!editing) return;
 
@@ -55,29 +112,37 @@ export default function AddressSection({ initialAddresses }: Props) {
     setErrorMsg("");
 
     try {
-      const list = editing.id
-        ? addresses.map((a) => (a.id === editing.id ? editing : a))
-        : [...addresses, { ...editing, id: editing.id ?? Date.now() }];
-
-      // se marcar principal, desmarca nas outras
-      if (editing.principal) {
-        list.forEach((a) => {
-          if (a.id !== editing.id) a.principal = false;
-        });
-      }
-
-      const res = await fetch("/api/account", {
-        method: "PUT",
+      const res = await fetch("/api/account/address", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ addresses: list }),
+        body: JSON.stringify(editing),
       });
 
+      const data = await res.json().catch(() => null);
+
       if (!res.ok) {
-        const data = await res.json().catch(() => null);
         throw new Error(data?.error || "Erro ao salvar endereço.");
       }
 
-      setAddresses(list);
+      const raw = data?.data;
+      if (!raw) throw new Error("Resposta inválida ao salvar endereço.");
+
+      const saved: Address = {
+        id: raw.id,
+        documentId: raw.documentId ?? null,
+        apelido: raw.apelido ?? "",
+        cep: raw.cep ?? "",
+        logradouro: raw.logradouro ?? "",
+        numero: raw.numero ?? "",
+        complemento: raw.complemento ?? "",
+        bairro: raw.bairro ?? "",
+        cidade: raw.cidade ?? "",
+        estado: raw.estado ?? "",
+        principal: !!raw.principal,
+      };
+
+      // Sempre mantém apenas UM endereço no estado
+      setAddresses([saved]);
       setEditing(null);
     } catch (err: any) {
       setErrorMsg(err.message || "Erro ao salvar.");
@@ -85,6 +150,8 @@ export default function AddressSection({ initialAddresses }: Props) {
       setLoading(false);
     }
   }
+
+  const mainAddress = addresses[0];
 
   return (
     <div className="flex flex-col gap-4">
@@ -95,54 +162,49 @@ export default function AddressSection({ initialAddresses }: Props) {
           onClick={startNew}
           className="text-sm font-medium text-orange-600 hover:text-orange-700"
         >
-          + Adicionar endereço
+          {mainAddress ? "+ Editar endereço" : "+ Adicionar endereço"}
         </button>
       </div>
 
-      {addresses.length === 0 && !editing && (
+      {!mainAddress && !editing && (
         <p className="text-sm text-neutral-500">
           Você ainda não cadastrou nenhum endereço de entrega.
         </p>
       )}
 
-      {/* Lista de endereços existentes */}
-      {addresses.length > 0 && (
+      {mainAddress && (
         <ul className="space-y-3">
-          {addresses.map((a) => (
-            <li
-              key={String(a.id)}
-              className="rounded-md border border-neutral-200 px-3 py-2 text-sm flex justify-between gap-4"
+          <li className="rounded-md border border-neutral-200 px-3 py-2 text-sm flex justify-between gap-4">
+            <div>
+              <p className="font-medium">
+                {mainAddress.apelido || "Endereço"}{" "}
+                {mainAddress.principal && (
+                  <span className="ml-1 rounded-full bg-green-100 px-2 py-[1px] text-[10px] font-semibold text-green-800">
+                    Principal
+                  </span>
+                )}
+              </p>
+              <p className="text-neutral-600">
+                {mainAddress.logradouro}, {mainAddress.numero}{" "}
+                {mainAddress.complemento &&
+                  `- ${mainAddress.complemento}`}
+              </p>
+              <p className="text-neutral-600">
+                {mainAddress.bairro} - {mainAddress.cidade}/
+                {mainAddress.estado} • CEP {mainAddress.cep}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="text-xs font-medium text-orange-600 hover:text-orange-700 whitespace-nowrap"
+              onClick={() => editAddress(mainAddress)}
             >
-              <div>
-                <p className="font-medium">
-                  {a.apelido || "Endereço"}{" "}
-                  {a.principal && (
-                    <span className="ml-1 rounded-full bg-green-100 px-2 py-[1px] text-[10px] font-semibold text-green-800">
-                      Principal
-                    </span>
-                  )}
-                </p>
-                <p className="text-neutral-600">
-                  {a.logradouro}, {a.numero}{" "}
-                  {a.complemento && `- ${a.complemento}`}
-                </p>
-                <p className="text-neutral-600">
-                  {a.bairro} - {a.cidade}/{a.estado} • CEP {a.cep}
-                </p>
-              </div>
-              <button
-                type="button"
-                className="text-xs font-medium text-orange-600 hover:text-orange-700 whitespace-nowrap"
-                onClick={() => editAddress(a)}
-              >
-                Editar
-              </button>
-            </li>
-          ))}
+              Editar
+            </button>
+          </li>
         </ul>
       )}
 
-      {/* Form de edição/criação */}
       {editing && (
         <form
           onSubmit={handleSave}
@@ -178,7 +240,9 @@ export default function AddressSection({ initialAddresses }: Props) {
               <input
                 className="w-full rounded border border-neutral-300 px-2 py-1 text-sm"
                 value={editing.logradouro ?? ""}
-                onChange={(e) => handleChange("logradouro", e.target.value)}
+                onChange={(e) =>
+                  handleChange("logradouro", e.target.value)
+                }
               />
             </div>
 
@@ -246,7 +310,9 @@ export default function AddressSection({ initialAddresses }: Props) {
             <input
               type="checkbox"
               checked={!!editing.principal}
-              onChange={(e) => handleChange("principal", e.target.checked)}
+              onChange={(e) =>
+                handleChange("principal", e.target.checked)
+              }
             />
             Definir como endereço principal
           </label>

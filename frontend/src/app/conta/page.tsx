@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import AddressSection, {
   Address,
 } from "@/components/account/AddressSection";
+import ProfileSection from "@/components/account/ProfileSection";
 
 async function loadAccount() {
   const base = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -29,33 +30,9 @@ export default async function AccountPage() {
 
   const account = await loadAccount();
 
-  // Tenta pegar dados tanto no formato "flat" quanto no formato aninhado (user/cliente)
-  const nome =
-    account?.name ??
-    account?.nome ??
-    account?.cliente?.nome ??
-    account?.user?.username ??
-    "";
-
-  const email =
-    account?.email ??
-    account?.user?.email ??
-    account?.cliente?.email ??
-    "";
-
-  const cpf =
-    account?.cpf ?? account?.cliente?.cpf ?? account?.documento ?? "";
-
-  const phone =
-    account?.phone ??
-    account?.telefone ??
-    account?.cliente?.telefone ??
-    "";
-
+  // Endereços vêm do /api/account (mantém compatibilidade com o que já existe)
   const enderecos: Address[] =
-    account?.enderecos ??
-    account?.cliente?.enderecos ??
-    [];
+    account?.enderecos ?? account?.cliente?.enderecos ?? [];
 
   return (
     <main>
@@ -68,63 +45,12 @@ export default async function AccountPage() {
 
         {/* Bloco: dados básicos + endereços */}
         <section className="grid gap-8 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] items-start">
-          {/* Dados pessoais */}
+          {/* Dados pessoais – agora controlado pelo componente client-side */}
           <div className="border border-neutral-200 rounded-md p-5 md:p-6">
-            <h2 className="text-lg font-semibold mb-4">Dados pessoais</h2>
-
-            {/*
-              Ainda é um form "burro" (server-render) com defaultValue.
-              No próximo passo a gente troca por um componente client-side
-              que manda PUT /api/account com nome/cpf/telefone.
-            */}
-            <form className="grid gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Nome</label>
-                <input
-                  defaultValue={nome}
-                  className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">E-mail</label>
-                <input
-                  defaultValue={email}
-                  disabled
-                  className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">CPF</label>
-                  <input
-                    defaultValue={cpf}
-                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Telefone
-                  </label>
-                  <input
-                    defaultValue={phone}
-                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                  />
-                </div>
-              </div>
-
-              {/* TODO: componente client-side para enviar PUT /api/account */}
-              <button
-                type="button"
-                className="mt-2 inline-flex items-center justify-center rounded-md bg-black px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
-              >
-                Salvar dados
-              </button>
-            </form>
+            <ProfileSection />
           </div>
 
-          {/* Endereços de entrega – agora com o componente que abre o form de novo endereço */}
+          {/* Endereços de entrega – usando o componente com edição/salvamento */}
           <div className="border border-neutral-200 rounded-md p-5 md:p-6">
             <AddressSection initialAddresses={enderecos} />
           </div>

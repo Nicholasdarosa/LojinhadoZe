@@ -20,7 +20,8 @@
       "required": true
     },
     "cpf": {
-      "type": "string"
+      "type": "string",
+      "unique": true
     },
     "telefone": {
       "type": "string"

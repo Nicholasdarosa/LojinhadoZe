@@ -1,91 +1,83 @@
 // src/components/cart/AddToCartButton.tsx
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ShoppingCart } from "lucide-react";
 
 type Props = {
   productId: number | string;
   slug: string;
   quantity?: number;
-  /** true = vai para /carrinho, false = só adiciona e fica na página */
-  redirectToCart?: boolean;
+  variantId?: number | string;
   label?: string;
-  variant?: "primary" | "secondary";
-  fullWidth?: boolean;
+  className?: string;
 };
 
 export default function AddToCartButton({
   productId,
   slug,
   quantity = 1,
-  redirectToCart = true,
-  label,
-  variant = "primary",
-  fullWidth = true,
+  variantId,
+  label = "Adicionar",
+  className,
 }: Props) {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
 
-  const text =
-    label ?? (redirectToCart ? "Comprar" : "Adicionar ao carrinho");
+  async function handleClick(
+    e: React.MouseEvent<HTMLButtonElement, MouseEvent>,
+  ) {
+    // Impede que o clique dispare a navegação do <Link> do card
+    e.preventDefault();
+    e.stopPropagation();
 
-  const baseClasses =
-    "inline-flex items-center justify-center rounded-md py-3 text-sm font-semibold transition";
-  const variantClasses =
-    variant === "primary"
-      ? "bg-[#ff6a00] text-white hover:brightness-95 active:scale-[0.99]"
-      : "border border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-50";
-  const widthClasses = fullWidth ? "w-full" : "";
-
-  async function handleClick() {
     if (loading) return;
     setLoading(true);
+
     try {
       const res = await fetch("/api/cart", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           productId,
+          slug,
           quantity,
-          slug, // 👈 AGORA ESTAMOS ENVIANDO O SLUG TAMBÉM
+          variantId,
         }),
       });
 
-      if (res.status === 401) {
-        router.push(
-          `/login?redirect=${encodeURIComponent(`/produto/${slug}`)}`,
-        );
-        return;
-      }
-
       if (!res.ok) {
-        console.error(
-          "Erro ao adicionar ao carrinho:",
-          await res.text(),
+        const data = await res.json().catch(() => null);
+        console.error("Erro ao adicionar ao carrinho:", data);
+        alert(
+          data?.message ||
+            "Não foi possível adicionar o produto ao carrinho.",
         );
-        alert("Não foi possível adicionar o produto ao carrinho.");
         return;
       }
 
-      if (redirectToCart) {
-        router.push("/carrinho");
-      } else {
-        router.refresh();
-      }
+      // Sucesso: só adiciona, sem redirecionar.
+      // Se depois quiser um toast, é aqui que você pluga.
+      // console.log("Produto adicionado ao carrinho");
+    } catch (err) {
+      console.error("Erro ao adicionar ao carrinho:", err);
+      alert("Não foi possível adicionar o produto ao carrinho.");
     } finally {
       setLoading(false);
     }
   }
+
+  const baseClasses =
+    "inline-flex w-full items-center justify-center gap-2 rounded-full bg-yellow-500 px-4 py-2 text-sm font-semibold text-black transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-70";
 
   return (
     <button
       type="button"
       onClick={handleClick}
       disabled={loading}
-      className={`${baseClasses} ${variantClasses} ${widthClasses} disabled:opacity-60 disabled:cursor-not-allowed`}
+      className={className ? `${baseClasses} ${className}` : baseClasses}
     >
-      {loading ? "Processando..." : text}
+      <ShoppingCart className="h-4 w-4" />
+      {loading ? "Adicionando..." : label}
     </button>
   );
 }

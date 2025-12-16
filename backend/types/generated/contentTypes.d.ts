@@ -462,7 +462,7 @@ export interface ApiClienteCliente extends Struct.CollectionTypeSchema {
     draftAndPublish: false;
   };
   attributes: {
-    cpf: Schema.Attribute.String;
+    cpf: Schema.Attribute.String & Schema.Attribute.Unique;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -514,6 +514,52 @@ export interface ApiConfigDoSiteConfigDoSite extends Struct.SingleTypeSchema {
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+  };
+}
+
+export interface ApiEnderecoEndereco extends Struct.CollectionTypeSchema {
+  collectionName: 'enderecos';
+  info: {
+    description: 'Endere\u00E7os de entrega dos clientes';
+    displayName: 'Endere\u00E7o';
+    pluralName: 'enderecos';
+    singularName: 'endereco';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  pluginOptions: {
+    i18n: {
+      localized: false;
+    };
+  };
+  attributes: {
+    apelido: Schema.Attribute.String;
+    bairro: Schema.Attribute.String;
+    cep: Schema.Attribute.String;
+    cidade: Schema.Attribute.String;
+    complemento: Schema.Attribute.String;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    estado: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::endereco.endereco'
+    > &
+      Schema.Attribute.Private;
+    logradouro: Schema.Attribute.String;
+    numero: Schema.Attribute.String;
+    principal: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    user: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
   };
 }
 
@@ -1167,6 +1213,7 @@ declare module '@strapi/strapi' {
       'api::categoria.categoria': ApiCategoriaCategoria;
       'api::cliente.cliente': ApiClienteCliente;
       'api::config-do-site.config-do-site': ApiConfigDoSiteConfigDoSite;
+      'api::endereco.endereco': ApiEnderecoEndereco;
       'api::home.home': ApiHomeHome;
       'api::marca.marca': ApiMarcaMarca;
       'api::produto.produto': ApiProdutoProduto;
